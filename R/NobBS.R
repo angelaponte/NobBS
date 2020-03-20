@@ -57,8 +57,14 @@ NobBS <- function(data, now, units, onset_date, report_date, moving_window=NULL,
                     nChains=1,
                     nBurnin=1000,
                     nThin=1,
-                    nSamp=10000)) {
+                    nSamp=10000),
+                    nThreads=1) {
 
+  # Only load parallel processing package if needed
+  if (nThreads > 1){
+    library(doSNOW)
+  }
+  
   # Check that "now" is entered as a Date
   if(inherits(now, "Date")==FALSE){
     stop("'Now' argument must be of datatype Date (as.Date)")
@@ -172,13 +178,37 @@ NobBS <- function(data, now, units, onset_date, report_date, moving_window=NULL,
   # Build the reporting triangle, fill with NAs where unobservable
   reporting.triangle <- matrix(NA, nrow=now.T,ncol=(max_D+1))
 
+  # Create parallel threads
+  if (nThreads > 1){
+    cl <- parallel::makeCluster(nThreads, type = "SOCK")
+    doSNOW::registerDoSNOW(cl)
+  }
+  
   for(t in 1:now.T){
-    for(d in 0:max_D){
-      reporting.triangle[t,(d+1)] <- nrow(realtime.data[which(realtime.data$week.t==t & realtime.data$delay==d),])
-      if(now.T < (t+d)){
-        reporting.triangle[t,(d+1)] <- NA
+    # Run parallel threads
+    if(nThreads > 1){
+      foreach(d in 0:max_D, .combine=rbind){
+        reporting.triangle[t,(d+1)] <- nrow(realtime.data[which(realtime.data$week.t==t & realtime.data$delay==d),])
+        if(now.T < (t+d)){
+          reporting.triangle[t,(d+1)] <- NA
+        }
       }
     }
+    # Run serial threads
+    else{
+      for(d in 0:max_D){
+        reporting.triangle[t,(d+1)] <- nrow(realtime.data[which(realtime.data$week.t==t & realtime.data$delay==d),])
+        if(now.T < (t+d)){
+          reporting.triangle[t,(d+1)] <- NA
+        }
+      }
+    }
+  }
+  
+  # Cleanup parallel cluster
+  if (nThreads > 1){
+    parallel::stopCluster(cl)
+    registerDoSEQ()
   }
 
   # Run the JAGS model
