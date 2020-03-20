@@ -187,7 +187,7 @@ NobBS <- function(data, now, units, onset_date, report_date, moving_window=NULL,
   for(t in 1:now.T){
     # Run parallel threads
     if(nThreads > 1){
-      foreach(d=0:max_D, .combine=rbind){
+      foreach(d=0:max_D) %dopar% {
         reporting.triangle[t,(d+1)] <- nrow(realtime.data[which(realtime.data$week.t==t & realtime.data$delay==d),])
         if(now.T < (t+d)){
           reporting.triangle[t,(d+1)] <- NA
